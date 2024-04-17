@@ -25,9 +25,9 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "model_path"        : 'model_data/yolox_vr.pth',
-        "classes_path"      : 'model_data/waterscenes_benchmark.txt',
-        "radar_root": "E:/Big_Datasets/water_surface/benchmark_new/WaterScenes_new/radar/VOCradar_new",
+        "model_path"        : 'model_data/yolox_waterscenes.pth',
+        "classes_path"      : 'model_data/waterscenes.txt',
+        "radar_root"        : '/data/WaterScenes_Published/VOCradar640_new',
         #---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
         #---------------------------------------------------------------------#
@@ -381,7 +381,7 @@ class YOLO(object):
 
         print('Onnx model save as {}'.format(model_path))
         
-    def get_map_txt(self, image, image_id, class_names, map_out_path):
+    def get_map_txt(self, image_id, image, class_names, map_out_path):
         f = open(os.path.join(map_out_path, "detection-results/"+image_id+".txt"),"w") 
         image_shape = np.array(np.shape(image)[0:2])
         #---------------------------------------------------------#

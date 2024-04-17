@@ -24,12 +24,12 @@ if __name__ == "__main__":
     #   map_mode为3代表仅仅计算VOC_map。
     #   map_mode为4代表利用COCO工具箱计算当前数据集的0.50:0.95map。需要获得预测结果、获得真实框后并安装pycocotools才行
     #-------------------------------------------------------------------------------------------------------------------#
-    map_mode        = 4
+    map_mode        = 0
     #--------------------------------------------------------------------------------------#
     #   此处的classes_path用于指定需要测量VOC_map的类别
     #   一般情况下与训练和预测所用的classes_path一致即可
     #--------------------------------------------------------------------------------------#
-    classes_path    = 'model_data/waterscenes_benchmark.txt'
+    classes_path    = 'model_data/waterscenes.txt'
     #--------------------------------------------------------------------------------------#
     #   MINOVERLAP用于指定想要获得的mAP0.x，mAP0.x的意义是什么请同学们百度一下。
     #   比如计算mAP0.75，可以设定MINOVERLAP = 0.75。
@@ -68,13 +68,13 @@ if __name__ == "__main__":
     #   指向VOC数据集所在的文件夹
     #   默认指向根目录下的VOC数据集
     #-------------------------------------------------------#
-    VOCdevkit_path  = 'E:/Big_Datasets/water_surface/benchmark_new/WaterScenes_new/VOC-DET'
+    VOCdevkit_path  = '/data/WaterScenes_Published'
     #-------------------------------------------------------#
     #   结果输出的文件夹，默认为map_out
     #-------------------------------------------------------#
     map_out_path    = 'map_out'
 
-    image_ids = open(os.path.join(VOCdevkit_path, "VOC2007/ImageSets/Main/water_2007_testweather.txt")).read().strip().split()
+    image_ids = open(os.path.join(VOCdevkit_path, "test.txt")).read().strip().split()
 
     if not os.path.exists(map_out_path):
         os.makedirs(map_out_path)
@@ -94,7 +94,8 @@ if __name__ == "__main__":
 
         print("Get predict result.")
         for image_id in tqdm(image_ids):
-            image_path  = os.path.join(VOCdevkit_path, "VOC2007/JPEGImages/"+image_id+".jpg")
+            image_id = os.path.splitext(os.path.basename(image_id))[0]
+            image_path  = os.path.join(VOCdevkit_path, "image/" + image_id + ".jpg")
             image       = Image.open(image_path)
             if map_vis:
                 image.save(os.path.join(map_out_path, "images-optional/" + image_id + ".jpg"))
@@ -104,8 +105,9 @@ if __name__ == "__main__":
     if map_mode == 0 or map_mode == 2:
         print("Get ground truth result.")
         for image_id in tqdm(image_ids):
+            image_id = os.path.splitext(os.path.basename(image_id))[0]
             with open(os.path.join(map_out_path, "ground-truth/"+image_id+".txt"), "w") as new_f:
-                root = ET.parse(os.path.join(VOCdevkit_path, "VOC2007/Annotations/"+image_id+".xml")).getroot()
+                root = ET.parse(os.path.join(VOCdevkit_path, "detection/xml/"+image_id+".xml")).getroot()
                 for obj in root.findall('object'):
                     difficult_flag = False
                     if obj.find('difficult')!=None:

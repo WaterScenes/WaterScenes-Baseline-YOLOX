@@ -67,8 +67,8 @@ if __name__ == "__main__":
     #   classes_path    指向model_data下的txt，与自己训练的数据集相关 
     #                   训练前一定要修改classes_path，使其对应自己的数据集
     #---------------------------------------------------------------------#
-    classes_path    = 'model_data/waterscenes_benchmark.txt'
-    radar_file_path = "/home/grw/workspace/Datasets/WaterScenes_new/radar/VOCradar_640"
+    classes_path    = 'model_data/waterscenes.txt'
+    radar_file_path = "/data/WaterScenes_Published/VOCradar640_new"
     #----------------------------------------------------------------------------------------------------------------------------#
     #   权值文件的下载请看README，可以通过网盘下载。模型的 预训练权重 对不同数据集是通用的，因为特征是通用的。
     #   模型的 预训练权重 比较重要的部分是 主干特征提取网络的权值部分，用于进行特征提取。
@@ -99,11 +99,11 @@ if __name__ == "__main__":
     phi             = 'm'
     #------------------------------------------------------------------#
 
-    # mosaic              = False
-    # mosaic_prob         = 0.5
-    # mixup               = False
-    # mixup_prob          = 0.5
-    # special_aug_ratio   = 0.7
+    mosaic              = False
+    mosaic_prob         = 0.5
+    mixup               = False
+    mixup_prob          = 0.5
+    special_aug_ratio   = 0.7
 
     #----------------------------------------------------------------------------------------------------------------------------#
     #   训练分为两个阶段，分别是冻结阶段和解冻阶段。设置冻结阶段是为了满足机器性能不足的同学的训练需求。
@@ -151,8 +151,8 @@ if __name__ == "__main__":
     #                           Adam可以使用相对较小的UnFreeze_Epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 100
-    Unfreeze_batch_size = 32
+    UnFreeze_Epoch      = 1
+    Unfreeze_batch_size = 6
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
@@ -207,7 +207,7 @@ if __name__ == "__main__":
     #                   开启后会加快数据读取速度，但是会占用更多内存
     #                   内存较小的电脑可以设置为2或者0  
     #------------------------------------------------------------------#
-    num_workers         = 8
+    num_workers         = 12
 
     #----------------------------------------------------#
     #   获得图片路径和标签

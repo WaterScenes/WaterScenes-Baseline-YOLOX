@@ -1,7 +1,0 @@
-pier
-buoy
-sailor
-ship
-boat
-vessel
-kayak

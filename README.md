@@ -1,29 +1,40 @@
-## YOLOX-VR for WaterScenes Benchmark
+## YOLOX Benchmark for WaterScenes 
 ---
 
 
-## Data Preparation
-1. Prepare the data in the format of 2007_train.txt and 2007_val.txt
-2. Define the class_path and radar_file_root
-
-```python
-classes_path    = 'model_data/waterscenes_benchmark.txt'
-radar_file_path = "your own path"
-```
-3. Train the model. All hyperparameters are in the train.py
-```python
-python train.py
-```
-
-4. Test the model. 
-   1. Modify various file paths.
-   2. run predict.py
-```python
-"model_path"        : r'model_data\yolov8_vr.pth',
-"classes_path"      : r'model_data\waterscenes_benchmark.txt',
-"radar_root": r"your radar map root",
-```
+### Data Preparation
+1. Download dataset from [WaterScenes](https://github.com/WaterScenes/WaterScenes)
 
 
-## Acknowledgement
+2. Train the model
+   * Modify paths in `train.py`
+
+      ```python
+      classes_path    = 'model_data/waterscenes.txt'
+      radar_file_path = "/data/WaterScenes_Published/VOCradar640_new"
+      ```
+
+   * run `CUDA_VISIBLE_DEVICES=0 python train.py`
+
+3. Test the model. 
+   * Download trained weight: [Baidu Netdisk](https://pan.baidu.com/s/1vDjObptPZCwbZY0KY_OpBw?pwd=8ip1)
+
+   * Modify paths in `yolo.py`
+
+      ```python
+            "model_path"        : 'model_data/yolox_waterscenes.pth',
+            "classes_path"      : 'model_data/waterscenes.txt',
+            "radar_root"        : '/data/WaterScenes_Published/VOCradar640_new',
+      ```
+
+   * Modify paths in `get_map.py`
+
+      ```python
+         VOCdevkit_path  = '/data/WaterScenes_Published'
+      ```
+
+   * run `python get_map.py`
+
+
+### Acknowledgement
 https://github.com/bubbliiiing/yolox-pytorch
