@@ -164,8 +164,9 @@ class YOLOPAFPN(nn.Module):
             act = act,
         )
 
-    def forward(self, input):
-        out_features            = self.backbone.forward(input)
+    def forward(self, input, input_radar):
+        out_features            = self.backbone.forward(input, input_radar)
+
         [feat1, feat2, feat3]   = [out_features[f] for f in self.in_features]
 
         #-------------------------------------------#
@@ -196,7 +197,7 @@ class YOLOPAFPN(nn.Module):
         #-------------------------------------------#
         #   80, 80, 256 + 80, 80, 256 -> 80, 80, 512
         #-------------------------------------------#
-        P4_upsample = torch.cat([P4_upsample, feat1], 1) 
+        P4_upsample = torch.cat([P4_upsample, feat1], 1)
         #-------------------------------------------#
         #   80, 80, 512 -> 80, 80, 256
         #-------------------------------------------#
@@ -241,7 +242,10 @@ class YoloBody(nn.Module):
         self.backbone   = YOLOPAFPN(depth, width, depthwise=depthwise)
         self.head       = YOLOXHead(num_classes, width, depthwise=depthwise)
 
-    def forward(self, x):
-        fpn_outs    = self.backbone.forward(x)
+    def forward(self, x, x_radar):
+        fpn_outs    = self.backbone.forward(x, x_radar)
         outputs     = self.head.forward(fpn_outs)
         return outputs
+
+
+

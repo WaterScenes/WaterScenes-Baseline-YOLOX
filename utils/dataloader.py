@@ -1,17 +1,17 @@
 from random import sample, shuffle
-
+import re
 import cv2
 import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data.dataset import Dataset
 
-from utils.utils import cvtColor, preprocess_input
+from utils.utils import cvtColor, preprocess_input, preprocess_input_radar
 
 
 class YoloDataset(Dataset):
     def __init__(self, annotation_lines, input_shape, num_classes, epoch_length, \
-                        mosaic, mixup, mosaic_prob, mixup_prob, train, special_aug_ratio = 0.7):
+                        mosaic, mixup, mosaic_prob, mixup_prob, train, radar_root, special_aug_ratio = 0.7):
         super(YoloDataset, self).__init__()
         self.annotation_lines   = annotation_lines
         self.input_shape        = input_shape
@@ -27,11 +27,18 @@ class YoloDataset(Dataset):
         self.epoch_now          = -1
         self.length             = len(self.annotation_lines)
 
+        self.radar_root = radar_root
+
     def __len__(self):
         return self.length
 
     def __getitem__(self, index):
         index = index % self.length
+
+        name = self.annotation_lines[index]
+        pattern_string = "\d{10}.\d{5}"
+        pattern = re.compile(pattern_string)  # 查找数字
+        name = pattern.findall(name)[-1]
         
         #---------------------------------------------------#
         #   训练时进行数据的随机增强
@@ -48,20 +55,29 @@ class YoloDataset(Dataset):
                 image_2, box_2  = self.get_random_data(lines[0], self.input_shape, random = self.train)
                 image, box      = self.get_random_data_with_MixUp(image, box, image_2, box_2)
         else:
-            image, box      = self.get_random_data(self.annotation_lines[index], self.input_shape, random = self.train)
+            image, box, radar      = self.get_random_data(self.annotation_lines[index], self.input_shape, name, random = self.train)
 
         image       = np.transpose(preprocess_input(np.array(image, dtype=np.float32)), (2, 0, 1))
         box         = np.array(box, dtype=np.float32)
         if len(box) != 0:
             box[:, 2:4] = box[:, 2:4] - box[:, 0:2]
             box[:, 0:2] = box[:, 0:2] + box[:, 2:4] / 2
-        return image, box
+        return image, box, radar
 
     def rand(self, a=0, b=1):
         return np.random.rand()*(b-a) + a
 
-    def get_random_data(self, annotation_line, input_shape, jitter=.3, hue=.1, sat=0.7, val=0.4, random=True):
+    def get_random_data(self, annotation_line, input_shape, id, jitter=.3, hue=.1, sat=0.7, val=0.4, random=True):
         line    = annotation_line.split()
+
+        # ------------------------------#
+        #   雷达特征读取
+        # ------------------------------#
+        radar_path = self.radar_root + '/' + id + '.npz'
+        radar_data = preprocess_input_radar(np.load(radar_path)['arr_0'])
+
+        line = annotation_line.split()
+
         #------------------------------#
         #   读取图像并转换成RGB图像
         #------------------------------#
@@ -92,6 +108,9 @@ class YoloDataset(Dataset):
             new_image.paste(image, (dx, dy))
             image_data  = np.array(new_image, np.float32)
 
+            # image_show = Image.fromarray(image_data)
+            # image_show.show()
+
             #---------------------------------#
             #   对真实框进行调整
             #---------------------------------#
@@ -106,7 +125,7 @@ class YoloDataset(Dataset):
                 box_h = box[:, 3] - box[:, 1]
                 box = box[np.logical_and(box_w>1, box_h>1)] # discard invalid box
 
-            return image_data, box
+            return image_data, box, radar_data
                 
         #------------------------------------------#
         #   对图像进行缩放并且进行长和宽的扭曲
@@ -173,7 +192,7 @@ class YoloDataset(Dataset):
             box_h = box[:, 3] - box[:, 1]
             box = box[np.logical_and(box_w>1, box_h>1)] 
         
-        return image_data, box
+        return image_data, box, radar_data
     
     def merge_bboxes(self, bboxes, cutx, cuty):
         merge_bbox = []
@@ -366,9 +385,12 @@ class YoloDataset(Dataset):
 def yolo_dataset_collate(batch):
     images = []
     bboxes = []
-    for img, box in batch:
+    radars = []
+    for img, box, radar in batch:
         images.append(img)
         bboxes.append(box)
+        radars.append(radar)
     images = torch.from_numpy(np.array(images)).type(torch.FloatTensor)
     bboxes = [torch.from_numpy(ann).type(torch.FloatTensor) for ann in bboxes]
-    return images, bboxes
+    radars = torch.from_numpy(np.array(radars)).type(torch.FloatTensor)
+    return images, bboxes, radars

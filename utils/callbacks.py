@@ -1,5 +1,5 @@
 import os
-
+import re
 import torch
 import matplotlib
 matplotlib.use('Agg')
@@ -77,7 +77,7 @@ class LossHistory():
         plt.close("all")
 
 class EvalCallback():
-    def __init__(self, net, input_shape, class_names, num_classes, val_lines, log_dir, cuda, \
+    def __init__(self, net, input_shape, class_names, num_classes, val_lines, log_dir, cuda, radar_path, \
             map_out_path=".temp_map_out", max_boxes=100, confidence=0.05, nms_iou=0.5, letterbox_image=True, MINOVERLAP=0.5, eval_flag=True, period=1):
         super(EvalCallback, self).__init__()
         
@@ -96,6 +96,7 @@ class EvalCallback():
         self.MINOVERLAP         = MINOVERLAP
         self.eval_flag          = eval_flag
         self.period             = period
+        self.radar_path = radar_path
         
         self.maps       = [0]
         self.epoches    = [0]
@@ -104,7 +105,7 @@ class EvalCallback():
                 f.write(str(0))
                 f.write("\n")
 
-    def get_map_txt(self, image_id, image, class_names, map_out_path):
+    def get_map_txt(self, image_id, image, radar_data, class_names, map_out_path):
         f = open(os.path.join(map_out_path, "detection-results/"+image_id+".txt"),"w") 
         image_shape = np.array(np.shape(image)[0:2])
         #---------------------------------------------------------#
@@ -129,7 +130,7 @@ class EvalCallback():
             #---------------------------------------------------------#
             #   将图像输入网络当中进行预测！
             #---------------------------------------------------------#
-            outputs = self.net(images)
+            outputs = self.net(images, radar_data)
             outputs = decode_outputs(outputs, self.input_shape)
             #---------------------------------------------------------#
             #   将预测框进行堆叠，然后进行非极大抑制
@@ -176,6 +177,18 @@ class EvalCallback():
             for annotation_line in tqdm(self.val_lines):
                 line        = annotation_line.split()
                 image_id    = os.path.basename(line[0]).split('.')[0]
+
+                # ------------------------------#
+                #   读取雷达特征map
+                # ------------------------------#
+                pattern_string = "\d{10}.\d{5}"
+                pattern = re.compile(pattern_string)  # 查找数字
+                name = pattern.findall(annotation_line)[-1]
+
+                radar_path = os.path.join(self.radar_path, name + '.npz')
+                radar_data = np.load(radar_path)['arr_0']
+                radar_data = torch.from_numpy(radar_data).type(torch.cuda.FloatTensor).unsqueeze(0)
+
                 #------------------------------#
                 #   读取图像并转换成RGB图像
                 #------------------------------#
@@ -187,7 +200,7 @@ class EvalCallback():
                 #------------------------------#
                 #   获得预测txt
                 #------------------------------#
-                self.get_map_txt(image_id, image, self.class_names, self.map_out_path)
+                self.get_map_txt(image_id, image, radar_data, self.class_names, self.map_out_path)
                 
                 #------------------------------#
                 #   获得真实框txt

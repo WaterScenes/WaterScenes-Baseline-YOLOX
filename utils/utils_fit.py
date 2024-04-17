@@ -18,7 +18,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
         if iteration >= epoch_step:
             break
 
-        images, targets = batch[0], batch[1]
+        images, targets, radars = batch[0], batch[1], batch[2]
         with torch.no_grad():
             if cuda:
                 images  = images.cuda(local_rank)
@@ -31,7 +31,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs         = model_train(images)
+            outputs         = model_train(images, radars)
 
             #----------------------#
             #   计算损失
@@ -46,7 +46,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
         else:
             from torch.cuda.amp import autocast
             with autocast():
-                outputs = model_train(images)
+                outputs = model_train(images, radars)
                 #----------------------#
                 #   计算损失
                 #----------------------#
@@ -87,6 +87,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
             if cuda:
                 images  = images.cuda(local_rank)
                 targets = [ann.cuda(local_rank) for ann in targets]
+                radars = radars.cuda(local_rank)
             #----------------------#
             #   清零梯度
             #----------------------#
@@ -94,7 +95,7 @@ def fit_one_epoch(model_train, model, ema, yolo_loss, loss_history, eval_callbac
             #----------------------#
             #   前向传播
             #----------------------#
-            outputs         = model_train_eval(images)
+            outputs         = model_train_eval(images, radars)
 
             #----------------------#
             #   计算损失

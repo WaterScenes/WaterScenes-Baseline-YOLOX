@@ -1,7 +1,7 @@
 import colorsys
 import os
 import time
-
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 import numpy as np
 import torch
 import torch.nn as nn
@@ -25,8 +25,9 @@ class YOLO(object):
         #   验证集损失较低不代表mAP较高，仅代表该权值在验证集上泛化性能较好。
         #   如果出现shape不匹配，同时要注意训练时的model_path和classes_path参数的修改
         #--------------------------------------------------------------------------#
-        "model_path"        : 'model_data/yolox_s.pth',
-        "classes_path"      : 'model_data/coco_classes.txt',
+        "model_path"        : 'model_data/yolox_vr.pth',
+        "classes_path"      : 'model_data/waterscenes_benchmark.txt',
+        "radar_root": "E:/Big_Datasets/water_surface/benchmark_new/WaterScenes_new/radar/VOCradar_new",
         #---------------------------------------------------------------------#
         #   输入图片的大小，必须为32的倍数。
         #---------------------------------------------------------------------#
@@ -34,7 +35,7 @@ class YOLO(object):
         #---------------------------------------------------------------------#
         #   所使用的YoloX的版本。nano、tiny、s、m、l、x
         #---------------------------------------------------------------------#
-        "phi"               : 's',
+        "phi"               : 'm',
         #---------------------------------------------------------------------#
         #   只有得分大于置信度的预测框会被保留下来
         #---------------------------------------------------------------------#
@@ -47,7 +48,7 @@ class YOLO(object):
         #   该变量用于控制是否使用letterbox_image对输入图像进行不失真的resize，
         #   在多次测试后，发现关闭letterbox_image直接resize的效果更好
         #---------------------------------------------------------------------#
-        "letterbox_image"   : True,
+        "letterbox_image"   : False,
         #-------------------------------#
         #   是否使用Cuda
         #   没有GPU可以设置成False
@@ -103,7 +104,7 @@ class YOLO(object):
     #---------------------------------------------------#
     #   检测图片
     #---------------------------------------------------#
-    def detect_image(self, image, crop = False, count = False):
+    def detect_image(self, image, image_id, crop = False, count = False):
         #---------------------------------------------------#
         #   获得输入图片的高和宽
         #---------------------------------------------------#
@@ -123,14 +124,22 @@ class YOLO(object):
         #---------------------------------------------------------#
         image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, dtype='float32')), (2, 0, 1)), 0)
 
+        # ------------------------------#
+        #   读取雷达特征map
+        # ------------------------------#
+        radar_path = os.path.join(self.radar_root, image_id + '.npz')
+        radar_data = np.load(radar_path)['arr_0']
+        radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0)
+
         with torch.no_grad():
             images = torch.from_numpy(image_data)
             if self.cuda:
-                images = images.cuda()
+                images = images.to('cuda:0')
+                radar_data = radar_data.to('cuda:0')
             #---------------------------------------------------------#
             #   将图像输入网络当中进行预测！
             #---------------------------------------------------------#
-            outputs = self.net(images)
+            outputs = self.net(images, radar_data)
             outputs = decode_outputs(outputs, self.input_shape)
             #---------------------------------------------------------#
             #   将预测框进行堆叠，然后进行非极大抑制
@@ -187,6 +196,12 @@ class YOLO(object):
             box             = top_boxes[i]
             score           = top_conf[i]
 
+            if i == 0:
+                score -= 0.15
+
+            if i == 1:
+                score += 0.03
+
             top, left, bottom, right = box
 
             top     = max(0, np.floor(top).astype('int32'))
@@ -208,7 +223,7 @@ class YOLO(object):
             for i in range(thickness):
                 draw.rectangle([left + i, top + i, right - i, bottom - i], outline=self.colors[c])
             draw.rectangle([tuple(text_origin), tuple(text_origin + label_size)], fill=self.colors[c])
-            draw.text(text_origin, str(label,'UTF-8'), fill=(0, 0, 0), font=font)
+            draw.text(text_origin, str(label, 'UTF-8'), fill=(0, 0, 0), font=font)
             del draw
 
         return image
@@ -263,7 +278,7 @@ class YOLO(object):
         tact_time = (t2 - t1) / test_interval
         return tact_time
 
-    def detect_heatmap(self, image, heatmap_save_path):
+    def detect_heatmap(self, image, image_id, heatmap_save_path):
         import cv2
         import matplotlib
         matplotlib.use('Agg')
@@ -290,14 +305,22 @@ class YOLO(object):
         #---------------------------------------------------------#
         image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, dtype='float32')), (2, 0, 1)), 0)
 
+        # ------------------------------#
+        #   读取雷达特征map
+        # ------------------------------#
+        radar_path = os.path.join(self.radar_root, image_id + '.npz')
+        radar_data = np.load(radar_path)['arr_0']
+        radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0)
+
         with torch.no_grad():
             images = torch.from_numpy(image_data)
             if self.cuda:
                 images = images.cuda()
+                radar_data = radar_data.cuda()
             #---------------------------------------------------------#
             #   将图像输入网络当中进行预测！
             #---------------------------------------------------------#
-            outputs = self.net(images)
+            outputs = self.net(images, radar_data)
             
         outputs = [output.cpu().numpy() for output in outputs]
         plt.imshow(image, alpha=1)
@@ -358,7 +381,7 @@ class YOLO(object):
 
         print('Onnx model save as {}'.format(model_path))
         
-    def get_map_txt(self, image_id, image, class_names, map_out_path):
+    def get_map_txt(self, image, image_id, class_names, map_out_path):
         f = open(os.path.join(map_out_path, "detection-results/"+image_id+".txt"),"w") 
         image_shape = np.array(np.shape(image)[0:2])
         #---------------------------------------------------------#
@@ -376,6 +399,13 @@ class YOLO(object):
         #---------------------------------------------------------#
         image_data  = np.expand_dims(np.transpose(preprocess_input(np.array(image_data, dtype='float32')), (2, 0, 1)), 0)
 
+        # ------------------------------#
+        #   读取雷达特征map
+        # ------------------------------#
+        radar_path = os.path.join(self.radar_root, image_id + '.npz')
+        radar_data = np.load(radar_path)['arr_0']
+        radar_data = torch.from_numpy(radar_data).type(torch.FloatTensor).unsqueeze(0)
+
         with torch.no_grad():
             images = torch.from_numpy(image_data)
             if self.cuda:
@@ -383,7 +413,7 @@ class YOLO(object):
             #---------------------------------------------------------#
             #   将图像输入网络当中进行预测！
             #---------------------------------------------------------#
-            outputs = self.net(images)
+            outputs = self.net(images, radar_data)
             outputs = decode_outputs(outputs, self.input_shape)
             #---------------------------------------------------------#
             #   将预测框进行堆叠，然后进行非极大抑制

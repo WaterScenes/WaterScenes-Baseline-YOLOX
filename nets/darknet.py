@@ -4,6 +4,9 @@
 
 import torch
 from torch import nn
+from nets.shuffle_attention import ShuffleAttention
+from nets.radar_conv import RadarConv, RCBlock
+import torch.nn.functional as F
 
 class SiLU(nn.Module):
     @staticmethod
@@ -164,6 +167,10 @@ class CSPDarknet(nn.Module):
         #   640, 640, 3 -> 320, 320, 12 -> 320, 320, 64
         #-----------------------------------------------#
         self.stem = Focus(3, base_channels, ksize=3, act=act)
+        self.stem_radar = RadarConv(in_channels=4, out_channels=base_channels, kernel_size=3, stride=2, first_calculator='pool')
+        self.learnable_param = nn.Parameter(torch.rand(1), requires_grad=True)
+        self.shuffle_attn = ShuffleAttention(channel=base_channels, G=4)
+
 
         #-----------------------------------------------#
         #   完成卷积之后，320, 320, 64 -> 160, 160, 128
@@ -203,10 +210,13 @@ class CSPDarknet(nn.Module):
             CSPLayer(base_channels * 16, base_channels * 16, n=base_depth, shortcut=False, depthwise=depthwise, act=act),
         )
 
-    def forward(self, x):
+    def forward(self, x, x_radar):
+
         outputs = {}
         x = self.stem(x)
-        outputs["stem"] = x
+        x_radar = self.stem_radar(x_radar)
+        outputs["stem"] = x + self.learnable_param*self.shuffle_attn(x_radar)
+
         x = self.dark2(x)
         outputs["dark2"] = x
         #-----------------------------------------------#

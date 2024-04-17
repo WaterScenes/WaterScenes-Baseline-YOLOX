@@ -1,7 +1,4 @@
-import random
-
 import numpy as np
-import torch
 from PIL import Image
 
 
@@ -43,32 +40,16 @@ def get_classes(classes_path):
     class_names = [c.strip() for c in class_names]
     return class_names, len(class_names)
 
-#---------------------------------------------------#
-#   设置种子
-#---------------------------------------------------#
-def seed_everything(seed=11):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-#---------------------------------------------------#
-#   设置Dataloader的种子
-#---------------------------------------------------#
-def worker_init_fn(worker_id, rank, seed):
-    worker_seed = rank + seed
-    random.seed(worker_seed)
-    np.random.seed(worker_seed)
-    torch.manual_seed(worker_seed)
-
 def preprocess_input(image):
     image /= 255.0
     image -= np.array([0.485, 0.456, 0.406])
     image /= np.array([0.229, 0.224, 0.225])
     return image
+
+def preprocess_input_radar(data):
+    _range = np.max(data) - np.min(data)
+    data = (data - np.min(data)) / _range + 0.000000000000001
+    return data
 
 #---------------------------------------------------#
 #   获得学习率

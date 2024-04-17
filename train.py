@@ -3,7 +3,6 @@
 #-------------------------------------#
 import datetime
 import os
-from functools import partial
 
 import numpy as np
 import torch
@@ -16,10 +15,9 @@ from torch.utils.data import DataLoader
 from nets.yolo import YoloBody
 from nets.yolo_training import (ModelEMA, YOLOLoss, get_lr_scheduler,
                                 set_optimizer_lr, weights_init)
-from utils.callbacks import EvalCallback, LossHistory
+from utils.callbacks import LossHistory, EvalCallback
 from utils.dataloader import YoloDataset, yolo_dataset_collate
-from utils.utils import (get_classes, seed_everything, show_config,
-                         worker_init_fn)
+from utils.utils import get_classes, show_config
 from utils.utils_fit import fit_one_epoch
 
 '''
@@ -44,11 +42,6 @@ if __name__ == "__main__":
     #           没有GPU可以设置成False
     #---------------------------------#
     Cuda            = True
-    #----------------------------------------------#
-    #   Seed    用于固定随机种子
-    #           使得每次独立训练都可以获得一样的结果
-    #----------------------------------------------#
-    seed            = 11
     #---------------------------------------------------------------------#
     #   distributed     用于指定是否使用单机多卡分布式运行
     #                   终端指令仅支持Ubuntu。CUDA_VISIBLE_DEVICES用于在Ubuntu下指定显卡。
@@ -69,12 +62,13 @@ if __name__ == "__main__":
     #   fp16        是否使用混合精度训练
     #               可减少约一半的显存、需要pytorch1.7.1以上
     #---------------------------------------------------------------------#
-    fp16            = False
+    fp16            = True
     #---------------------------------------------------------------------#
     #   classes_path    指向model_data下的txt，与自己训练的数据集相关 
     #                   训练前一定要修改classes_path，使其对应自己的数据集
     #---------------------------------------------------------------------#
-    classes_path    = 'model_data/voc_classes.txt'
+    classes_path    = 'model_data/waterscenes_benchmark.txt'
+    radar_file_path = "/home/grw/workspace/Datasets/WaterScenes_new/radar/VOCradar_640"
     #----------------------------------------------------------------------------------------------------------------------------#
     #   权值文件的下载请看README，可以通过网盘下载。模型的 预训练权重 对不同数据集是通用的，因为特征是通用的。
     #   模型的 预训练权重 比较重要的部分是 主干特征提取网络的权值部分，用于进行特征提取。
@@ -94,7 +88,7 @@ if __name__ == "__main__":
     #      可以设置mosaic=True，直接随机初始化参数开始训练，但得到的效果仍然不如有预训练的情况。（像COCO这样的大数据集可以这样做）
     #   2、了解imagenet数据集，首先训练分类模型，获得网络的主干部分权值，分类模型的 主干部分 和该模型通用，基于此进行训练。
     #----------------------------------------------------------------------------------------------------------------------------#
-    model_path      = 'model_data/yolox_s.pth'
+    model_path      = ''
     #------------------------------------------------------#
     #   input_shape     输入的shape大小，一定要是32的倍数
     #------------------------------------------------------#
@@ -102,27 +96,14 @@ if __name__ == "__main__":
     #------------------------------------------------------#
     #   所使用的YoloX的版本。nano、tiny、s、m、l、x
     #------------------------------------------------------#
-    phi             = 's'
+    phi             = 'm'
     #------------------------------------------------------------------#
-    #   mosaic              马赛克数据增强。
-    #   mosaic_prob         每个step有多少概率使用mosaic数据增强，默认50%。
-    #
-    #   mixup               是否使用mixup数据增强，仅在mosaic=True时有效。
-    #                       只会对mosaic增强后的图片进行mixup的处理。
-    #   mixup_prob          有多少概率在mosaic后使用mixup数据增强，默认50%。
-    #                       总的mixup概率为mosaic_prob * mixup_prob。
-    #
-    #   special_aug_ratio   参考YoloX，由于Mosaic生成的训练图片，远远脱离自然图片的真实分布。
-    #                       当mosaic=True时，本代码会在special_aug_ratio范围内开启mosaic。
-    #                       默认为前70%个epoch，100个世代会开启70个世代。
-    #
-    #   余弦退火算法的参数放到下面的lr_decay_type中设置
-    #------------------------------------------------------------------#
-    mosaic              = True
-    mosaic_prob         = 0.5
-    mixup               = True
-    mixup_prob          = 0.5
-    special_aug_ratio   = 0.7
+
+    # mosaic              = False
+    # mosaic_prob         = 0.5
+    # mixup               = False
+    # mixup_prob          = 0.5
+    # special_aug_ratio   = 0.7
 
     #----------------------------------------------------------------------------------------------------------------------------#
     #   训练分为两个阶段，分别是冻结阶段和解冻阶段。设置冻结阶段是为了满足机器性能不足的同学的训练需求。
@@ -170,13 +151,13 @@ if __name__ == "__main__":
     #                           Adam可以使用相对较小的UnFreeze_Epoch
     #   Unfreeze_batch_size     模型在解冻后的batch_size
     #------------------------------------------------------------------#
-    UnFreeze_Epoch      = 300
-    Unfreeze_batch_size = 8
+    UnFreeze_Epoch      = 100
+    Unfreeze_batch_size = 32
     #------------------------------------------------------------------#
     #   Freeze_Train    是否进行冻结训练
     #                   默认先冻结主干训练后解冻训练。
     #------------------------------------------------------------------#
-    Freeze_Train        = True
+    Freeze_Train        = False
     
     #------------------------------------------------------------------#
     #   其它训练参数：学习率、优化器、学习率下降有关
@@ -205,7 +186,7 @@ if __name__ == "__main__":
     #------------------------------------------------------------------#
     #   save_period     多少个epoch保存一次权值
     #------------------------------------------------------------------#
-    save_period         = 10
+    save_period         = 1
     #------------------------------------------------------------------#
     #   save_dir        权值与日志文件保存的文件夹
     #------------------------------------------------------------------#
@@ -220,13 +201,13 @@ if __name__ == "__main__":
     #   （二）此处设置评估参数较为保守，目的是加快评估速度。
     #------------------------------------------------------------------#
     eval_flag           = True
-    eval_period         = 10
+    eval_period         = 1
     #------------------------------------------------------------------#
     #   num_workers     用于设置是否使用多线程读取数据
     #                   开启后会加快数据读取速度，但是会占用更多内存
     #                   内存较小的电脑可以设置为2或者0  
     #------------------------------------------------------------------#
-    num_workers         = 4
+    num_workers         = 8
 
     #----------------------------------------------------#
     #   获得图片路径和标签
@@ -234,7 +215,6 @@ if __name__ == "__main__":
     train_annotation_path   = '2007_train.txt'
     val_annotation_path     = '2007_val.txt'
 
-    seed_everything(seed)
     #------------------------------------------------------#
     #   设置用到的显卡
     #------------------------------------------------------#
@@ -443,9 +423,9 @@ if __name__ == "__main__":
         #---------------------------------------#
         #   构建数据集加载器。
         #---------------------------------------#
-        train_dataset   = YoloDataset(train_lines, input_shape, num_classes, epoch_length = UnFreeze_Epoch, \
-                                            mosaic=mosaic, mixup=mixup, mosaic_prob=mosaic_prob, mixup_prob=mixup_prob, train=True, special_aug_ratio=special_aug_ratio)
-        val_dataset     = YoloDataset(val_lines, input_shape, num_classes, epoch_length = UnFreeze_Epoch, \
+        train_dataset   = YoloDataset(train_lines, input_shape, num_classes, epoch_length = UnFreeze_Epoch, radar_root=radar_file_path,\
+                                            mosaic=mosaic, mixup=mixup, mosaic_prob=mosaic_prob, mixup_prob=mixup_prob, train=False, special_aug_ratio=special_aug_ratio)
+        val_dataset     = YoloDataset(val_lines, input_shape, num_classes, epoch_length = UnFreeze_Epoch, radar_root=radar_file_path,\
                                             mosaic=False, mixup=False, mosaic_prob=0, mixup_prob=0, train=False, special_aug_ratio=0)
         
         if distributed:
@@ -459,18 +439,16 @@ if __name__ == "__main__":
             shuffle         = True
 
         gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
-                                    drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler, 
-                                    worker_init_fn=partial(worker_init_fn, rank=rank, seed=seed))
+                                    drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
         gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
-                                    drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler, 
-                                    worker_init_fn=partial(worker_init_fn, rank=rank, seed=seed))
+                                    drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
 
         #----------------------#
         #   记录eval的map曲线
         #----------------------#
         if local_rank == 0:
             eval_callback   = EvalCallback(model, input_shape, class_names, num_classes, val_lines, log_dir, Cuda, \
-                                            eval_flag=eval_flag, period=eval_period)
+                                            eval_flag=eval_flag, period=eval_period, radar_path=radar_file_path)
         else:
             eval_callback   = None
         
@@ -514,11 +492,10 @@ if __name__ == "__main__":
                     ema.updates     = epoch_step * epoch
                     
                 gen             = DataLoader(train_dataset, shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True,
-                                            drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler, 
-                                            worker_init_fn=partial(worker_init_fn, rank=rank, seed=seed))
+                                            drop_last=True, collate_fn=yolo_dataset_collate, sampler=train_sampler)
                 gen_val         = DataLoader(val_dataset  , shuffle = shuffle, batch_size = batch_size, num_workers = num_workers, pin_memory=True, 
-                                            drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler, 
-                                            worker_init_fn=partial(worker_init_fn, rank=rank, seed=seed))
+                                            drop_last=True, collate_fn=yolo_dataset_collate, sampler=val_sampler)
+
                 UnFreeze_flag = True
 
             gen.dataset.epoch_now       = epoch

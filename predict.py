@@ -7,7 +7,8 @@ import time
 import cv2
 import numpy as np
 from PIL import Image
-
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
 from yolo import YOLO
 
 if __name__ == "__main__":
@@ -21,7 +22,7 @@ if __name__ == "__main__":
     #   'heatmap'           表示进行预测结果的热力图可视化，详情查看下方注释。
     #   'export_onnx'       表示将模型导出为onnx，需要pytorch1.7.1以上。
     #----------------------------------------------------------------------------------------------------------#
-    mode = "predict"
+    mode = "heatmap"
     #-------------------------------------------------------------------------#
     #   crop                指定了是否在单张图片预测后对目标进行截取
     #   count               指定了是否进行目标的计数
@@ -82,13 +83,14 @@ if __name__ == "__main__":
         '''
         while True:
             img = input('Input image filename:')
+            image_id = img[-20:-4]
             try:
                 image = Image.open(img)
             except:
                 print('Open Error! Try again!')
                 continue
             else:
-                r_image = yolo.detect_image(image, crop = crop, count=count)
+                r_image = yolo.detect_image(image, image_id, crop = crop, count=count)
                 r_image.show()
 
     elif mode == "video":
@@ -161,13 +163,14 @@ if __name__ == "__main__":
     elif mode == "heatmap":
         while True:
             img = input('Input image filename:')
+            image_id = img[-20:-4]
             try:
                 image = Image.open(img)
             except:
                 print('Open Error! Try again!')
                 continue
             else:
-                yolo.detect_heatmap(image, heatmap_save_path)
+                yolo.detect_heatmap(image, image_id, heatmap_save_path)
                 
     elif mode == "export_onnx":
         yolo.convert_to_onnx(simplify, onnx_save_path)
